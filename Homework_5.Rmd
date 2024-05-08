@@ -1,0 +1,122 @@
+---
+title: "Homework 5"
+author: "Skylar Liu"
+date: "2024-02-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_template$set(figure1 = list(fig.height = 3.7, fig.width = 5),
+                         figure2 = list(fig.height = 3.7, fig.width = 8))
+```
+
+Homework #5, Stat 660, Spring 2024, Due Class #7, February 7, 2024
+
+1. Do a similar analysis about heteroscedasticity for each choice of k as was done in Lecture 5. 
+Plot the fitted absolute residuals against either the predicted values or against X, your
+choice. Put them on one graph, and display.
+
+```{r absolute residuals, opts.label = "figure1", fig.align="center"}
+# clear workspace
+rm(list = ls())
+# set the seed
+set.seed(382957)
+library(HRW)
+library(mgcv)
+
+# import data
+fossil = read.csv("~/660 - Flexible Regression/Homework/Homework3/fossil.csv")
+X = fossil$Age
+Y = fossil$Strontium.Ratio
+
+# Fit a default gam to the data
+gam_default = gam(Y~s(X,bs="cr"))
+
+# mgcv fit with K = 4 knots
+gam4 = gam(Y~s(X,bs="cr",k=4))
+# mgcv fit with K = 8 knots
+gam8 = gam(Y~s(X,bs="cr",k=8))
+# mgcv fit with K = 23 knots
+gam23 = gam(Y~s(X,bs="cr",k=23))
+
+# absolute residual plot against predicted values
+ord = sort(X, index.return = T)$ix
+plot(X, abs(gam_default$residuals),
+     ylab="Absolute Residuals", 
+     main="Absolute Residuals of Fossil data for K=4,8,23",
+     xlab="Age (X)")
+y4    = abs(gam4$residuals)
+y8   = abs(gam8$residuals)
+y23    = abs(gam23$residuals)
+gam4_abs = gam(y4~s(X,bs="cr"))
+gam8_abs = gam(y8~s(X,bs="cr"))
+gam23_abs = gam(y23~s(X,bs="cr"))
+lines(X[ord],fitted(gam4_abs)[ord],lwd=3,col="blue")
+lines(X[ord],fitted(gam8_abs)[ord],lwd=3,col="red")
+lines(X[ord],fitted(gam23_abs)[ord],lwd=3,col="green")
+legend("topright", legend = c("K=4", "K=8", "K=23"), col=c("blue", "red", "green"),lty=1, cex=0.8)
+```
+2. Display the ratio of the maximum fitted absolute residual to the minimum fitted absolute
+residual, for each case.
+
+```{r abs ratios}
+# ratio of the maximum fitted absolute residual to the minimum fitted absolute residual
+ratio_k4 = max(abs(fitted(gam4_abs))) / min(abs(fitted(gam4_abs)))
+ratio_k8 = max(abs(fitted(gam8_abs))) / min(abs(fitted(gam8_abs)))
+ratio_k23 = max(abs(fitted(gam23_abs))) / min(abs(fitted(gam23_abs)))
+cat('k = 4 fit, maximum to minimum ratio = ',ratio_k4,"\n")
+cat('k = 8 fit, maximum to minimum ratio = ',ratio_k8,"\n")
+cat('k = 23 fit, maximum to minimum ratio = ',ratio_k23,"\n")
+```
+> All of these fits fail the rule of thumb, since the ratios are all above 3. K=8 and K=23 are just over the line while K=4 is well over 3.
+
+4. If any choice of k fails my rule of thumb, describe in words what that means. Remember,
+it is possible that the heteroscedasticity can occur in the middle of the X values, and not
+merely at the end.
+
+> Since all of these values fail the rule of thumb, there is heteroscedasticity somewhere in the model and we cannot trust the confidnce intervals.
+
+5. Give a verbal description of what k is.
+
+> K is the number of knots, which are points where the slope appears to change on a continuous fitted line. Increased knots increase flexibility and wiggles in the line.
+
+6. Load the trees data set: install.packages("trees", dependencies=TRUE). Then
+library(trees). Ignore any messages. The response Y is volume of the tree, and the
+predictors are girth and height of the tree. Run mgcv::gam with volume as the response,
+height entering the model linearly, and girth entering as a cubic Bspline with k=5 (there
+are only 32 or so data points, so too many basis functions are silly). Show the summary
+output and plot the model object (just guess).
+
+```{r trees, opts.label = "figure1", fig.align="center"}
+# import the tree package
+library(tree)
+
+# define variables
+volume = trees$Volume
+height = trees$Height
+girth  = trees$Girth
+
+# fit the tree data
+gam_spline = gam(volume ~ height + s(girth,bs="cr", k=5))
+summary(gam_spline)
+
+# plot the model
+plot(gam_spline, 
+     main="Tree Spline Model",
+     xlab="Volume", ylab="fitted(gam_spline)", cex=2)
+```
+
+7. Rerun the model, except this time making girth a linear predictor. Compare the two models
+using an anova statement. Try anova(‘Linear Fit Name”,”Spline fit Name”,type=”?”), and
+display the p-value. With such a small sample size, do not be surprised if the p-value is not
+< 0.05.
+
+```{r mgcv fit}
+# fit using girth as a linear predictor
+gam_linear = gam(volume ~ height + girth)
+
+# anova comparison
+anova(gam_linear, gam_spline, test = "Chisq")
+cat('p-value = ',anova(gam_linear, gam_spline, test = "Chisq")$"Pr(>Chi)"[2],"\n")
+```

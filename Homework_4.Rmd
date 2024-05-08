@@ -1,0 +1,135 @@
+---
+title: "Homework 4"
+author: "Skylar Liu"
+date: "2024-02-03"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_template$set(figure1 = list(fig.height = 3.7, fig.width = 5),
+                         figure2 = list(fig.height = 3.7, fig.width = 8))
+```
+
+Homework #4, Stat 660, Spring 2024, Class #6, Monday February 5, 2024
+
+1. Display and study the scatterplot of these data. What features of the data look interesting
+to you? Do this before answering the other questions.
+
+```{r scatterplot, opts.label = "figure1", fig.align="center"}
+# clear workspace
+rm(list = ls())
+# set the seed
+set.seed(382957)
+
+# import data
+fossil = read.csv("~/660 - Flexible Regression/Homework/Homework3/fossil.csv")
+X = fossil$Age
+Y = fossil$Strontium.Ratio
+
+# scatterplot X vs Y
+plot(X, Y, type="p",pch='*',main="Fossil Age vs. Strontium Ratio",
+     xlab="Age",ylab="Strontium Ratio",cex=2)
+```
+> The pattern of the data is interesting to me, particularly how the Strontium Ratio dips around 114 years of Age. It appears to be in a general cubic shape.
+
+2. Fit the fossil data using the default version of smooth.spline.
+
+>a. Get and save the model object. You use something like myspline =
+smooth.spline(…). The model object is myspline.
+
+```{r smooth spline}
+# Get the smooth.spline function
+library(HRW)
+
+# fit the smooth.spline model
+myspline = smooth.spline(X, Y)
+```
+
+>b. Add the fitted line to the scatter plot of the data and display the resulting plot.
+
+```{r fitted line, opts.label = "figure1", fig.align="center"}
+# use the predict function to setup the line
+mypred = predict(myspline)
+
+# plot the scatter plot and fitted line
+plot(X, Y, type="p",pch='*',main="Fossil Data With Spline Fit",
+     xlab="Age",ylab="Strontium Ratio",cex=2)
+lines(mypred$x,mypred$y,lwd=3,col="red")
+```
+
+3. Run the mgcv fit to the data with the default number of knots (K=8) and with both K = 4
+and K = 23 knots and using the cubic spline option as I have done. Save the model fit
+objects, e.g., gam4, gam8 and gam23.
+
+>a. Which fits are statistically significant? Be sure to quote the p-values for all three.
+
+```{r mgcv fit}
+# Get the mgcv package
+library(mgcv)
+
+# mgcv fit with K = 4 knots
+gam4 = gam(Y~s(X,bs="cr",k=4))
+summary(gam4)
+
+# mgcv fit with K = 8 knots
+gam8 = gam(Y~s(X,bs="cr",k=8))
+summary(gam8)
+
+# mgcv fit with K = 23 knots
+gam23 = gam(Y~s(X,bs="cr",k=23))
+summary(gam23)
+```
+> The p-value for all three knot values (k = 4, 8, and 23) is 2^-16. Since this value is less than alpha=.05, they are all statistically significant.
+
+>b. Plot the fits with the data points on one graph ONLY and submit that graph.
+
+```{r mgcv fit plot, opts.label = "figure1", fig.align="center"}
+# sort the data
+ord = sort(X, index.return = T)$ix
+
+# plot the scatter plot and fitted lines
+plot(X, Y, type="p",pch='*',main="Fossil Data With GAM Fits",
+     xlab="Age",ylab="Strontium Ratio",cex=2)
+lines(X[ord], fitted(gam4)[ord], lwd=3, col="blue")
+lines(X[ord], fitted(gam8)[ord], lwd=3, col="red")
+lines(X[ord], fitted(gam23)[ord], lwd=3, col="green")
+legend("bottomleft", legend = c("K=4", "K=8", "K=23"), col=c("blue", "red", "green"),lty=1, cex=0.8)
+```
+>c. Do the fits agree more or less with your answer to Question 1? Why or why not?
+
+> In general, the plots create a cubic fit consistent with my observations. The K=23 fit deviates slightly, with bumps around age 100. 
+
+4. What are the effective degrees of freedom for each mgcv fit?
+
+```{r EDF}
+# check the effective degrees of freedom for each mgcv fit
+gam.check(gam4)
+gam.check(gam8)
+gam.check(gam23)
+```
+
+> EDF of gam4: 3
+EDF of gam8: 6.5
+EDF of gam23: 11.5
+
+```{r lambdas}
+# lambda of each mgcv fit
+gam4$sp
+gam8$sp
+gam23$sp
+```
+> gam4: lambda = 0.01212764 
+gam8: lambda = 0.5889037 
+gam23: lambda = 7.493726 
+
+6. Tell me whether or not the p-value for each choice of K is < 0.10. Cite those p-values. If
+any are < 0.10, then explain intuitively from your graphs why that number of basis
+functions is inadequate.
+
+> K = 4: p-value = <2e-16 < 0.10
+K = 8: p-value = 0.07 < 0.10
+K = 23: p-value = 0.68 < 0.10
+
+> K=4 and K=8 p-values are < 0.10, suggesting an inadequate number of knots. These number of basis functions fail to pick up the bump that is present in K=23, around age 100.
+

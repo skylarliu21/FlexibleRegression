@@ -1,0 +1,197 @@
+---
+title: "Homework 9"
+author: "Skylar Liu"
+date: "2024-03-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_template$set(figure1 = list(fig.height = 3.7, fig.width = 5),
+                         figure2 = list(fig.height = 3.7, fig.width = 8))
+```
+
+1. Install the package AER. Then get the library(AER), then data(HousePrices) and then
+library(mgcv)
+
+```{r initiate}
+rm(list = ls())
+set.seed(382957)
+options(repos = list(CRAN="http://cran.rstudio.com/"))
+
+#install and load data and packages
+install.packages('AER')
+library(AER)
+data("HousePrices")
+library(mgcv)
+```
+
+2. Run the code
+>fitGaussAM = gam(price ~ s(lotsize,bs="cr",k=105)
++ bedrooms
++ factor(bathrooms)
++ factor(stories)
++ factor(driveway)
++ factor(recreation)
++ factor(fullbase)
++ factor(gasheat)
++ factor(aircon)
++ garage
++ factor(prefer),
+data = HousePrices,family = gaussian)
+summary(fitGaussAM)
+
+Is lot size statistically significant at p=0.05?
+
+```{r fitGaussAM}
+# run example code
+fitGaussAM = gam(price ~ s(lotsize,bs="cr",k=105)
+                + bedrooms
+                + factor(bathrooms)
+                + factor(stories)
+                + factor(driveway)
+                + factor(recreation)
+                + factor(fullbase)
+                + factor(gasheat)
+                + factor(aircon)
+                + garage
+                + factor(prefer),
+                data = HousePrices,family = gaussian)
+summary(fitGaussAM)
+```
+> The p-value of lot size is 2^-16, so it is significant at the alpha=0.5 level.
+
+3. Use the anova function to test whether the spline model is better than just modeling lotsize
+as a linear term.
+
+```{r spline test}
+# Lotsize as linear term
+fitGaussFull = gam(price ~ lotsize
+                + bedrooms
+                + factor(bathrooms)
+                + factor(stories)
+                + factor(driveway)
+                + factor(recreation)
+                + factor(fullbase)
+                + factor(gasheat)
+                + factor(aircon)
+                + garage
+                + factor(prefer),
+                data = HousePrices,family = gaussian)
+
+# Test lotsize spline vs no spline
+anova(fitGaussAM,fitGaussFull,test="Chisq")
+```
+> The p-value of the anova is 2.84^-5 which is statistically significatn at the 0.05 level, indicating that the spline model is better than no spline.
+
+4. Use gam.check(fitGaussAM) to see if you have enough basis functions. Do you? 
+
+```{r gam check}
+# Check basis functions
+gam.check(fitGaussAM)
+```
+
+> The p-value is large at 0.97, indicating that there are enough basis functions present.
+
+5. Consider a house with a lot size of 5000 square feet, three bedrooms, two bathrooms, two
+stories, a driveway, no recreation room, a finished basement, hot water heating, no air
+conditioning, two garage places, and located outside of the preferred neighborhood of
+Windsor, Canada. Predict the mean price of all houses under those constraints.
+
+```{r prediction}
+# Set up prediction parameters
+example <- data.frame(lotsize = 5000,
+                      bedrooms = 3,
+                      bathrooms = 2,
+                      stories = 2,
+                      driveway = "yes",
+                      recreation = "no",
+                      fullbase = "yes",
+                      gasheat = "yes",
+                      aircon = "no",
+                      garage = 2,
+                      prefer = "no")
+
+# Predict mean price of all houses with give constraints
+predicted_price <- predict(fitGaussAM, newdata = example, type = "response", se.fit = TRUE)
+mean = predicted_price$fit
+se   = predicted_price$se.fit
+mean
+```
+> The predicted mean housing price is $91,617.43.
+
+6. Find an approximate 95% confidence interval for the mean price above.
+
+```{r CI}
+# 95% CI for the mean housing price
+n = length(HousePrices$price)
+t = qt(0.975, df = n-2)
+upperCI = mean + t * se
+lowerCI = mean - t * se
+c(lowerCI, upperCI)
+```
+> The 95% CI for housing prices is ($81,561.41, $101,673.45)
+
+7. Now restart R and and install the packages aplore3 and gam. Make sure you detach mgcv
+before doing this.
+a. Add in library(aplore3); library(gam); data(icu); help(icu).
+
+```{r restart}
+rm(list = ls())
+
+detach("package:mgcv", unload=TRUE)
+library(aplore3)
+library(gam)
+
+data(icu)
+help(icu)
+```
+
+8. Let Y be the response that the patient dies. The help file will help you figure out what this
+variable is. Run stepwise regression (step.Gam) with possible splines for age (age), heart
+rate (hra) and systolic blood pressure (sys), with 3 EDF. The binary predictor (no spline)
+is gender.
+
+```{r stepwise}
+# Make Y numeric
+icu$sta = as.numeric(icu$sta == "Died")
+Y = icu$sta
+
+# Run a baseline linear regression
+baseGam = gam:::gam(Y ~ as.factor(gender) 
+                    + age 
+                    + hra 
+                    + sys, 
+                    family = binomial,
+                    data=icu)
+
+# Run the stepwise regression 
+stepGam = step.Gam(baseGam,
+                   scope =
+                     list("gender" = ~1 + as.factor(gender),
+                          "age" = ~1 + age + s(age,3),
+                          "hra" = ~1 + hra + s(hra,3),
+                          "sys" = ~1 + sys + s(sys,3)),
+                   family = binomial,data = icu)
+```
+
+9. What is the indicated model?
+
+> The indicated model (Step:3) includes age and systolic blood pressure as a spline [s(sys, 3)].
+
+10. Detach the gam package and rerun using mgcv::gam with the indicated stepwise model: use
+k = 10 and bs=”cr”. What terms are statistically significant at the 0.05 level?
+
+```{r}
+# Detach the gam package and load mgcv
+detach("package:gam", unload=TRUE)
+library(mgcv)
+
+# Run stepwise using mgcv
+mgcvStep = gam(Y ~ age 
+               + s(sys,k = 10,bs="cr"), 
+               family = binomial, 
+               data=icu)
+summary(mgcvStep)
+```
+> Both age and systolic blood pressure are significant at the 0.05 level.

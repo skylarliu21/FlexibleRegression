@@ -1,0 +1,153 @@
+---
+title: "Homework 7"
+author: "Skylar Liu"
+date: "2024-02-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_template$set(figure1 = list(fig.height = 3.7, fig.width = 5),
+                         figure2 = list(fig.height = 3.7, fig.width = 8))
+```
+
+Homework #7, Stat 660, Spring 2024, Due Saturday, February 25
+
+1. Fit an ordinary logistic regression with response = CHD, and predictor = Age. Show the 
+summary table. 
+
+```{r log regres}
+# clear workspace
+rm(list = ls())
+# set the seed
+set.seed(382957)
+library(HRW)
+library(mgcv)
+
+# import data
+init = read.csv("~/660 - Flexible Regression/Homework/Homework6/Framingham.csv")
+SBP      = rowMeans(init[, c(3:6)])
+LSBP     = log(SBP - 50)
+cholest  = rowMeans(init[, c(8:9)])
+Lcholest = log(cholest)
+data     = cbind(init[, c("CHD", "Age", "Smoker")], LSBP, Lcholest)
+
+# fit an ordinary logistic regression
+data$CHD <- as.numeric(as.character(data$CHD))
+
+framlog <- mgcv::gam(CHD ~ Age, family = binomial(link="logit"), data = data)
+summary(framlog)
+```
+2. In Question 1, display the fit without the data points. Just plot the model object. We know 
+that when plotting the model object, mgcv::gam ignored the intercept. 
+
+```{r plot log regres}
+#Model predictor
+gampred <- predict(framlog, type = "response")
+
+# Plot the log regression model object
+plot(data$Age, data$CHD, type="n",xlim = c(30,70), ylim = c(0, 1),xlab="Age", ylab="CHD", main = "CHD vs Age")
+lines(gampred, lwd=2, col = "red")
+```
+3. In Question 1, is the fit statistically significant?
+
+> The deviance explained for the ordinary logistic regression model is small (3.81%), suggesting that the model is a good fit. The p-values for Age is also statistically significant, with 1.12x10^-8 much smaller than 0.05.
+
+4. In Question 1, test whether the fit is linear or quadratic versus the need to do a 
+semiparametric fit, i.e., a spline in age
+
+```{r anova}
+# Fit a quadratic fit
+framquad = mgcv::gam(CHD ~ poly(Age,degree=2), family = binomial(link="logit"),    
+                      data = data)
+
+# Fit a semiparametric fit
+framparam = mgcv::gam(CHD ~ s(Age,bs="cr"), family = binomial(link="logit"),    
+                      data = data)
+
+# Test linear vs semiparametric
+anova(framlog,framparam,test="Chisq")
+
+# Test quadratic vs semiparametric
+anova(framquad,framparam,test="Chisq")
+```
+>A spline is only necessary in the linear fit, with a statistically significant p-value of 0.033 which is less than 0.05. The p-value for the quadratic fit is not statistically significant at 0.2153, suggesting we don't need the spline for this case.
+
+5. Fit a logistic gam with all the predictors but only LSBP modeled as a spline. 
+
+```{r all predicts}
+# Fit a logistic game with all predictors, LSBP as spline
+framall <- mgcv::gam(CHD ~ Age + Smoker + Lcholest + s(LSBP,bs="cr"), 
+                     family = binomial(link="logit"), 
+                     data = data)
+summary(framall)
+```
+
+>a. Quote the p-values for all of the predictors. 
+P-values:
+Age: 1.87e-06 
+Smoker: 0.016
+Lcholest: 3.61e-06
+LSBP: 0.000537
+
+>b. Answer whether the fit suggests that LSBP should be modeled as a spline.
+Remember, you need to do an ANOVA for this will the null model having 
+everything modeled as ordinary logistic regression. 
+
+```{r LSBP spline test}
+# Fit a logistic game with all predictors
+framall2 <- mgcv::gam(CHD ~ Age + Smoker + Lcholest + LSBP, 
+                     family = binomial(link="logit"), 
+                     data = data)
+
+# Test LSBP with or without spline
+anova(framall2,framall,test="Chisq")
+```
+> LSBP does not need to be modeled as a spline; when tested against everything modeled as ordinary logistic regression, the p-value is 0.1691 which is not statistically significant at the 0.05 level.
+
+6. Fit a logistic gam with LSBP, Lcholest and age modeled as splines. Quote the p-values for 
+all predictors. Tell me which of the spline terms seem like they are worth modeling as a 
+spline. Remember, you need to do an ANOVA for this will the null model having 
+everything modeled as ordinary linear logistic regression, but use mgcv::gam.
+
+```{r splines}
+# Fit a logistic gam with LSBP, Lcholest, and age as splines
+framsplines <- mgcv::gam(CHD ~ s(LSBP,bs="cr") + s(Lcholest,bs="cr") + s(Age,bs="cr") + Smoker, 
+                     family = binomial(link="logit"), 
+                     data = data)
+summary(framsplines)
+
+# Compare to ordinary linear logistic regression
+anova(framall2,framsplines,test="Chisq")
+
+# Test each spline to see which is significant
+framLSBP <- mgcv::gam(CHD ~ s(LSBP,bs="cr") + Lcholest + Age + Smoker, 
+                     family = binomial(link="logit"), 
+                     data = data)
+framLcholest <- mgcv::gam(CHD ~ LSBP + s(Lcholest,bs="cr") + Age + Smoker, 
+                     family = binomial(link="logit"), 
+                     data = data)
+framAge <- mgcv::gam(CHD ~ LSBP + Lcholest + s(Age,bs="cr") + Smoker, 
+                     family = binomial(link="logit"), 
+                     data = data)
+
+# Compare to ordinary linear logistic regression
+anova(framall2,framLSBP,test="Chisq")
+anova(framall2,framLcholest,test="Chisq")
+anova(framall2,framAge,test="Chisq")
+```
+> P-values:
+Smoker: 0.0181
+LSBP: 0.000353
+Lcholest: 6.60e-06
+Age: 4.45e-05
+
+>Lcholest is the only statistically significant spline term, with a p-value of 0.018. LSBP has a p-value of 0.169 and Age has a p-value of 0.056, which are not statistically significant at the 0.05 level.
+
+7. This is an open-ended question with no absolutely correct answer. It will not be graded. At 
+some point in life, you are going to have to summarize your results to people who do not 
+care for the details of the analysis. So, having done an exhaustive and exhausting analysis, 
+write a paragraph free of technical jargon about what things you think might be important 
+in predicting who is at higher risk of getting coronary heart disease.
+
+> There are many possible variables that may contribute to a hightened risk of getting coronoary heart disease. Based on our recent analysis, I have analyzed Age, Cholesterol, Smoking status, and Systolic blood pressure. From the data provided, I have observed cholesterol and age to be the greatest predictors of getting coronary heart disease. 
